@@ -1,54 +1,51 @@
-const targetEl   = document.getElementById('target');
-const checkBtn   = document.getElementById('check');
-const spinnerEl  = document.getElementById('spinner');
-const resultEl   = document.getElementById('result');
-const permalinkEl= document.getElementById('permalink');
+// src/frontend/app.js
 
-// At the top of app.js
-const API_BASE =
-  window.location.hostname === "localhost"
-    ? "http://127.0.0.1:8787"
-    : "";  // empty means “same origin” in prod
+// Grab DOM elements
+const targetEl    = document.getElementById('target');
+const checkBtn    = document.getElementById('check');
+const spinnerEl   = document.getElementById('spinner');
+const resultEl    = document.getElementById('result');
+const permalinkEl = document.getElementById('permalink');
 
-checkBtn.addEventListener("click", async () => {
-  // 1. Normalize the URL
-  let raw = targetEl.value.trim();
-  if (!/^https?:\/\//i.test(raw)) raw = "https://" + raw;
-  // 2. Build the full endpoint
-  const endpoint = `${API_BASE}/?url=${encodeURIComponent(raw)}`;
+// In dev we hit the Worker proxy on 8787; in prod we hit /api/check on same origin
+const API_BASE = window.location.hostname === 'localhost'
+  ? 'http://127.0.0.1:8787'
+  : '';
 
-  // 3. Perform the fetch
-  spinnerEl.classList.remove("hidden");
-  try {
-    const res = await fetch(endpoint);
-    const data = await res.json();
-    spinnerEl.classList.add("hidden");
-    // …your existing result‐rendering logic…
-  } catch (err) {
-    spinnerEl.classList.add("hidden");
-    resultEl.textContent = "⚠️ Error checking URL";
-    console.error(err);
+// ALWAYS call /api/check
+function buildEndpoint(rawUrl) {
+  const encoded = encodeURIComponent(rawUrl);
+  return API_BASE
+    ? `${API_BASE}/api/check?url=${encoded}`
+    : `/api/check?url=${encoded}`;
+}
+
+// Normalize input (prepend https:// if missing)
+function normalizeUrl(input) {
+  let url = input.trim();
+  if (!/^https?:\/\//i.test(url)) {
+    url = 'https://' + url;
   }
-});
-
+  return url;
+}
 
 checkBtn.addEventListener('click', async () => {
-  const url = targetEl.value.trim();
-  if (!url) {
+  // Clear previous UI state
+  resultEl.textContent = '';
+  permalinkEl.innerHTML = '';
+
+  let raw = targetEl.value;
+  if (!raw) {
     resultEl.textContent = '👉 Please enter a URL';
     return;
   }
 
-  // Reset UI
-  resultEl.textContent = '';
-  permalinkEl.innerHTML = '';
+  const url = normalizeUrl(raw);
   spinnerEl.classList.remove('hidden');
 
   try {
-    // In prod this will be /api/check, in dev it's /?url=
-    const endpoint = window.location.pathname.startsWith('/api')
-      ? `/api/check?url=${encodeURIComponent(url)}`
-      : `/?url=${encodeURIComponent(url)}`;
+    const endpoint = buildEndpoint(url);
+    console.log('📡 Calling endpoint:', endpoint);
 
     const res = await fetch(endpoint);
     const data = await res.json();
@@ -62,17 +59,15 @@ checkBtn.addEventListener('click', async () => {
       resultEl.className = 'text-red-600';
     }
 
-    // Build a tiny shareable permalink
+    // Create a shareable permalink
     const slug = encodeURIComponent(url);
-    const link = `${window.location.origin}/${slug}`;
-    permalinkEl.innerHTML = `Share: <a href="${link}">${link}</a>`;
+    const shareUrl = API_BASE
+      ? `${API_BASE}/${slug}`
+      : `${window.location.origin}/${slug}`;
+    permalinkEl.innerHTML = `Share: <a href="${shareUrl}">${shareUrl}</a>`;
   } catch (err) {
     spinnerEl.classList.add('hidden');
     resultEl.textContent = '⚠️ Error checking URL';
-    console.error(err);
+    console.error('Fetch error:', err);
   }
 });
-
-
-
-
